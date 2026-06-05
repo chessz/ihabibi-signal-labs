@@ -1,0 +1,312 @@
+# signals-lab Main Configuration
+# Loaded via Pydantic Settings with environment variable overrides
+
+app:
+  name: "signals-lab"
+  environment: "development"  # development, staging, production
+  log_level: "INFO"
+  timezone: "UTC"
+
+storage:
+  timeseries:
+    url: "postgresql://postgres:postgres@localhost:5432/signals_ts"
+    pool_size: 10
+    max_overflow: 20
+    pool_timeout: 30
+    pool_recycle: 3600
+    echo: false
+  relational:
+    url: "postgresql://postgres:postgres@localhost:5432/signals_rel"
+    pool_size: 10
+    max_overflow: 20
+    pool_timeout: 30
+    pool_recycle: 3600
+    echo: false
+
+ingestion:
+  market:
+    enabled: true
+    interval_seconds: 60
+    batch_size: 100
+    timeout_seconds: 30
+    retry_attempts: 3
+    retry_backoff_seconds: 5
+    providers:
+      - name: "binance"
+        type: "rest"
+        base_url: "https://api.binance.com"
+        symbols:
+          - "BTC/USDT"
+          - "ETH/USDT"
+          - "SOL/USDT"
+          - "BNB/USDT"
+          - "XRP/USDT"
+          - "ADA/USDT"
+          - "DOGE/USDT"
+          - "AVAX/USDT"
+        rate_limit_per_minute: 1200
+        websocket_enabled: true
+  social:
+    enabled: true
+    interval_seconds: 300
+    batch_size: 50
+    timeout_seconds: 30
+    retry_attempts: 3
+    retry_backoff_seconds: 10
+    providers:
+      - name: "lunarcrush"
+        type: "rest"
+        base_url: "https://api.lunarcrush.com/v2"
+        api_key_env: "LUNARCRUSH_API_KEY"
+        assets: ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "AVAX"]
+        rate_limit_per_minute: 60
+  onchain:
+    enabled: false
+    interval_seconds: 900
+    batch_size: 50
+    timeout_seconds: 60
+    retry_attempts: 2
+    retry_backoff_seconds: 30
+    providers:
+      - name: "glassnode"
+        type: "rest"
+        base_url: "https://api.glassnode.com/v1"
+        api_key_env: "GLASSNODE_API_KEY"
+        metrics:
+          - "addresses/active_count"
+          - "transactions/count"
+          - "market/price_usd_close"
+    # Glassnode, Nansen, etc. - enable when API keys available
+  events:
+    enabled: true
+    interval_seconds: 300
+    batch_size: 100
+    timeout_seconds: 30
+    retry_attempts: 3
+    retry_backoff_seconds: 10
+    providers:
+      - name: "newsapi"
+        type: "rest"
+        base_url: "https://newsapi.org/v2"
+        api_key_env: "NEWSAPI_KEY"
+        query: "crypto OR bitcoin OR ethereum OR blockchain"
+        language: "en"
+        page_size: 50
+      - name: "cryptopanic"
+        type: "rest"
+        base_url: "https://cryptopanic.com/api/v1"
+        api_key_env: "CRYPTOPANIC_API_KEY"
+        filter: "hot"
+        public: "true"
+
+features:
+  computation_windows: ["1h", "4h", "1d"]
+  lookback_periods: 500
+  min_data_points: 50
+  families:
+    trend:
+      enabled: true
+      params:
+        sma_periods: [20, 50, 200]
+        ema_periods: [12, 26, 50]
+        adx_period: 14
+        adx_threshold: 25
+        parabolic_sar_acceleration: 0.02
+        parabolic_sar_maximum: 0.2
+    momentum:
+      enabled: true
+      params:
+        rsi_period: 14
+        rsi_overbought: 70
+        rsi_oversold: 30
+        macd_fast: 12
+        macd_slow: 26
+        macd_signal: 9
+        roc_period: 10
+        stoch_k_period: 14
+        stoch_d_period: 3
+        stoch_overbought: 80
+        stoch_oversold: 20
+    mean_reversion:
+      enabled: true
+      params:
+        bb_period: 20
+        bb_std_dev: 2
+        zscore_period: 20
+        zscore_threshold: 2.0
+        rsi_period: 14
+        rsi_extreme_overbought: 80
+        rsi_extreme_oversold: 20
+    volatility:
+      enabled: true
+      params:
+        atr_period: 14
+        realized_vol_period: 20
+        realized_vol_annualization: 365
+        vol_regime_lookback: 100
+        vol_expansion_threshold: 1.5
+        vol_contraction_threshold: 0.7
+    social:
+      enabled: true
+      params:
+        velocity_window: "24h"
+        velocity_min_mentions: 100
+        sentiment_divergence_window: "48h"
+        dominance_shift_threshold: 0.05
+        influencer_concentration_threshold: 0.3
+    onchain:
+      enabled: false
+      params:
+        flow_imbalance_window: "24h"
+        whale_threshold_usd: 1000000
+        supply_concentration_threshold: 0.15
+        stablecoin_flow_window: "24h"
+    events:
+      enabled: true
+      params:
+        risk_penalty_severity_weights:
+          "1": 0.0
+          "2": 0.05
+          "3": 0.15
+          "4": 0.30
+          "5": 0.50
+        catalyst_proximity_hours: 72
+        event_decay_half_life_hours: 48
+    cross_asset:
+      enabled: true
+      params:
+        correlation_window: "30d"
+        correlation_min_periods: 30
+        beta_reference: "BTC/USDT"
+        sector_rotation_lookback: "7d"
+
+signals:
+  min_confidence_for_publish: 70
+  confidence_bands:
+    low: [0, 40)
+    medium: [40, 60)
+    high: [60, 80)
+    extreme: [80, 100]
+  rule_version: "v1.0.0"
+  max_signals_per_asset: 1
+  signal_cooldown_hours: 4
+  expiry_hours_by_horizon:
+    "1h": 4
+    "4h": 12
+    "1d": 48
+    "1w": 168
+  default_horizon: "4h"
+  regime_filters:
+    enabled: true
+    allowed_regimes_for_long:
+      - "trending_up"
+      - "ranging"
+    allowed_regimes_for_short:
+      - "trending_down"
+      - "ranging"
+    blocked_regimes:
+      - "volatile"
+      - "unknown"
+  risk_management:
+    default_stop_type: "atr_trailing"
+    default_stop_atr_multiple: 2.0
+    default_take_profit_type: "risk_reward"
+    default_risk_reward_ratio: 2.0
+    max_position_size_pct: 0.10
+    max_portfolio_exposure_pct: 0.80
+
+evaluation:
+  paper_trading:
+    enabled: true
+    fee_bps: 10
+    slippage_bps: 5
+    initial_capital_usd: 100000
+    max_position_pct: 0.10
+    max_open_positions: 10
+    allow_short: true
+    compound_returns: true
+  metrics:
+    window_days: 30
+    min_trades_for_stats: 10
+    confidence_band_analysis: true
+    regime_analysis: true
+    signal_class_analysis: true
+    decay_analysis: true
+    sell_timing_analysis: true
+  reporting:
+    generate_daily: true
+    generate_weekly: true
+    generate_monthly: true
+    output_format: "json"
+    output_path: "./reports"
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: true
+  rate_limit: "100/minute"
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+  api_keys:
+    - name: "ihabibi-trading"
+      key_env: "IHABIBI_API_KEY"
+      permissions:
+        - "read:signals"
+        - "read:performance"
+        - "read:health"
+    - name: "internal-admin"
+      key_env: "ADMIN_API_KEY"
+      permissions:
+        - "*"
+  docs_enabled: true
+  openapi_prefix: "/api/v1"
+
+workers:
+  ingestion:
+    enabled: true
+    concurrency: 4
+    graceful_shutdown_timeout: 30
+  features:
+    enabled: true
+    concurrency: 2
+    schedule_cron: "*/15 * * * *"  # Every 15 minutes
+    graceful_shutdown_timeout: 60
+  signals:
+    enabled: true
+    concurrency: 1
+    schedule_cron: "*/5 * * * *"  # Every 5 minutes
+    graceful_shutdown_timeout: 60
+  evaluation:
+    enabled: true
+    concurrency: 1
+    schedule_cron: "0 * * * *"  # Hourly
+    graceful_shutdown_timeout: 60
+
+events:
+  enabled: false  # Enable when NATS is available
+  nats:
+    url: "nats://localhost:4222"
+    max_reconnect_attempts: 10
+    reconnect_time_wait: 2
+    ping_interval: 30
+    max_pings_out: 3
+  topics:
+    market_observations: "market.observations.>"
+    social_observations: "social.observations.>"
+    onchain_observations: "onchain.observations.>"
+    event_observations: "events.observations.>"
+    features_computed: "features.computed.>"
+    signals_generated: "signals.generated.>"
+    evaluation_updates: "evaluation.position_update.>"
+
+logging:
+  level: "INFO"
+  format: "json"
+  output: "stdout"
+  structured: true
+  include_timestamp: true
+  include_level: true
+  include_logger: true
+  sampling_rate: 1.0
