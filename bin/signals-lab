@@ -38,7 +38,23 @@ dim()     { _color "0;90" "$*"; }
 require_venv() {
     if [[ ! -x "$PYTHON" ]]; then
         err "Virtual environment not found at ${VENV}"
-        info "Run: bin/signals-lab setup"
+        info "Run: ./setup.sh"
+        info "Or:  bin/signals-lab setup"
+        exit 1
+    fi
+}
+
+require_deps() {
+    require_venv
+    local missing=()
+    for mod in asyncpg httpx pydantic yaml structlog; do
+        if ! "$PYTHON" -c "import ${mod}" 2>/dev/null; then
+            missing+=("$mod")
+        fi
+    done
+    if ((${#missing[@]} > 0)); then
+        err "Missing Python packages: ${missing[*]}"
+        info "Run: ./setup.sh"
         exit 1
     fi
 }
@@ -82,7 +98,7 @@ FastAPI to downstream consumers like iHabibi Trading.
 
 Workflow
 --------
-  setup          Create venv and install dependencies
+  setup          Create venv and install dependencies  (./setup.sh)
   config         Inspect or validate configuration
   ingest         Fetch data from providers → TimescaleDB
   features       Compute technical features from observations
@@ -94,13 +110,15 @@ Workflow
   lint           Run ruff linter / formatter
   typecheck      Run mypy on src/signals_lab
   check          Run lint + typecheck + unit tests (quality gates)
+  health         Test API keys, providers, RSS feeds, and databases
+  context        Export unified spec for Perplexity Pro / external LLMs
   version        Show package version
 
 Commands
 --------
 EOF
 
-    printf "  %-22s %s\n" "setup"              "[available] Create .venv and pip install -e \".[dev]\""
+    printf "  %-22s %s\n" "setup"              "[available] ./setup.sh — venv + all dependencies"
     printf "  %-22s %s\n" "config show"          "[available] Print active settings summary"
     printf "  %-22s %s\n" "config validate"     "[available] Validate settings.yaml loads cleanly"
     printf "  %-22s %s\n" "features list"       "[available] List registered feature definitions"
@@ -112,6 +130,9 @@ EOF
     printf "  %-22s %s\n" "lint [check|fix]"    "[available] ruff check / format"
     printf "  %-22s %s\n" "typecheck"           "[available] mypy src/signals_lab"
     printf "  %-22s %s\n" "check"               "[available] lint + typecheck + unit tests"
+    printf "  %-22s %s\n" "health [apis|db]"    "[available] Test API keys, RSS feeds, databases"
+    printf "  %-22s %s\n" "api health"           "[available] External API connectivity only"
+    printf "  %-22s %s\n" "context export"       "[available] Build docs/PERPLEXITY_CONTEXT.md for Perplexity Pro"
     printf "  %-22s %s\n" "version"             "[available] Print version string"
     echo ""
     dim "Planned (not yet wired — use python -m signals_lab.cli.main when available):"
@@ -125,23 +146,24 @@ EOF
     echo ""
     heading "Examples"
     cat <<'EOF'
-  bin/signals-lab setup
-  bin/signals-lab config show
-  bin/signals-lab features list
-  bin/signals-lab features compute
-  bin/signals-lab ingest status
-  bin/signals-lab ingest once          # requires PostgreSQL/TimescaleDB
-  bin/signals-lab check
-  bin/signals-lab test -- -k confidence
-  bin/signals-lab help ingest
-  bin/signals-lab help features
-
-Environment
------------
+  ./setup.sh                          # first-time bootstrap (recommended)
+  export PATH="$(pwd)/bin:$PATH"      # then use signals-lab anywhere
+  signals-lab config show
+  signals-lab features compute        # no database needed
+  signals-lab check                   # lint + tests
+  signals-lab health                  # test APIs + DB
+  signals-lab health apis             # APIs/RSS only (no DB required)
+  signals-lab context export          # Perplexity Pro unified spec
+  signals-lab ingest once             # needs PostgreSQL/TimescaleDB
+  signals-lab help ingest
+EOF
+    echo ""
+    heading "Environment"
+    cat <<'EOF'
   Copy .env.example → .env and set API keys (LunarCrush, NewsAPI, etc.).
   Config file: config/settings.yaml (overridable via SIGNALSLAB_* env vars).
 
-Docs: README.md · ARCHITECTURE.md · SPECS.md · AGENTS.md
+Docs: README.md · ARCHITECTURE.md · SPECS.md · AGENTS.md · docs/PERPLEXITY_SPACE_INSTRUCTIONS.md
 EOF
 }
 
@@ -151,13 +173,18 @@ cmd_help_topic() {
             cat <<'EOF'
 setup — Bootstrap the development environment
 
-  bin/signals-lab setup
+  ./setup.sh
+  ./setup.sh --check      Verify without reinstalling
+  ./setup.sh --dev-only   Skip optional ta-lib
 
-Creates .venv/ in the repo root and installs the package in editable mode
-with dev dependencies (pytest, ruff, mypy, etc.).
+Also available as: bin/signals-lab setup
 
-After setup, activate manually if you prefer:
-  source .venv/bin/activate
+Creates .venv/, installs all Python dependencies (asyncpg, httpx, …),
+copies .env.example → .env, and validates config/settings.yaml.
+
+After setup:
+  export PATH="$(pwd)/bin:$PATH"
+  signals-lab help
 EOF
             ;;
         config)
@@ -239,16 +266,54 @@ EOF
             ;;
         api)
             cat <<'EOF'
-api — FastAPI publishing layer [planned]
+api — FastAPI publishing layer
 
-  bin/signals-lab api serve    Start uvicorn on host:port from settings
-  bin/signals-lab api routes   List registered OpenAPI routes
+  bin/signals-lab api health     Test upstream provider connectivity (APIs/RSS)
+  bin/signals-lab api serve      [planned] Start uvicorn FastAPI server
+  bin/signals-lab api routes     [planned] List registered OpenAPI routes
 
 Planned endpoints (/api/v1):
   GET /signals              Publishable HIGH/EXTREME signals
   GET /signals/{id}         Full signal with provenance
   GET /performance/summary  Rolling evaluation metrics
   GET /health               Liveness check
+EOF
+            ;;
+        health)
+            cat <<'EOF'
+health — API and infrastructure connectivity checks
+
+  bin/signals-lab health           All checks (config + APIs + RSS + databases)
+  bin/signals-lab health apis      External APIs only (no database required)
+  bin/signals-lab health db        PostgreSQL / TimescaleDB only
+  bin/signals-health               Shortcut wrapper (same as health)
+
+Checks performed:
+  binance, newsapi, lunarcrush, glassnode, cryptopanic
+  coindesk_rss, cointelegraph_rss (free, no key)
+  timescale_db, relational_db
+
+Loads API keys from .env automatically. Exit 1 if any check fails.
+EOF
+            ;;
+        context|perplexity)
+            cat <<'EOF'
+context — Export unified spec for Perplexity Pro (strategic brain)
+
+  bin/signals-lab context export          Build docs/PERPLEXITY_CONTEXT.md
+  bin/signals-lab context export pdf     Build .pdf for Perplexity upload (recommended)
+  bin/signals-lab context export txt     Build .txt fallback
+  bin/signals-lab context export all     Build .md, .txt, and .pdf
+
+Writes context files for Perplexity Space. Upload the .txt file — .md often fails.
+
+Workflow:
+  1. context export pdf (after milestone changes)
+  2. Upload docs/PERPLEXITY_CONTEXT.txt to Perplexity Space
+  3. Copy docs/PERPLEXITY_SPACE_INSTRUCTIONS.md into Space Instructions
+  4. Ask Perplexity using prompt template in context doc §12
+
+If upload fails: paste .txt content into Space Instructions instead.
 EOF
             ;;
         db|database)
@@ -279,7 +344,7 @@ EOF
             ;;
         *)
             err "Unknown help topic: $1"
-            dim "Topics: setup, config, ingest, features, signals, evaluate, api, db, test"
+            dim "Topics: setup, config, ingest, features, signals, evaluate, api, health, context, db, test"
             exit 1
             ;;
     esac
@@ -290,6 +355,9 @@ EOF
 # ---------------------------------------------------------------------------
 
 cmd_setup() {
+    if [[ -x "${ROOT}/setup.sh" ]]; then
+        exec "${ROOT}/setup.sh" "$@"
+    fi
     heading "Setting up signals-lab..."
     cd "$ROOT"
 
@@ -468,6 +536,7 @@ PY
 # ---------------------------------------------------------------------------
 
 cmd_ingest() {
+    require_deps
     local sub="${1:-status}"
     shift || true
 
@@ -581,7 +650,47 @@ cmd_evaluate() {
 
 cmd_api() {
     local sub="${1:-serve}"
-    cmd_planned "api" "$sub"
+    shift || true
+    case "$sub" in
+        health|check)
+            cmd_health "apis" "$@"
+            ;;
+        serve|routes)
+            cmd_planned "api" "$sub"
+            ;;
+        *)
+            err "Unknown api subcommand: $sub (try: health, serve, routes)"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_health() {
+    require_deps
+    local scope="${1:-all}"
+    case "$scope" in
+        all|apis|db) ;;
+        -h|--help|help)
+            cmd_help health
+            return
+            ;;
+        *)
+            err "Unknown health scope: $scope (try: all, apis, db)"
+            exit 1
+            ;;
+    esac
+
+    heading "Running health checks (scope=${scope})..."
+    run_python_stdin <<PY
+import asyncio
+import sys
+from pathlib import Path
+from signals_lab.utils.health import run_health_checks
+
+root = Path("${ROOT}")
+exit_code = asyncio.run(run_health_checks(scope="${scope}", project_root=root))
+raise SystemExit(exit_code)
+PY
 }
 
 cmd_db() {
@@ -659,6 +768,81 @@ PY
     fi
 }
 
+cmd_context() {
+    require_deps
+    local sub="${1:-export}"
+    shift || true
+
+    case "$sub" in
+        export|generate|build)
+            local fmt="md"
+            if [[ "${1:-}" == "txt" || "${1:-}" == "text" ]]; then
+                fmt="txt"
+                shift || true
+            elif [[ "${1:-}" == "pdf" ]]; then
+                fmt="pdf"
+                shift || true
+            elif [[ "${1:-}" == "all" ]]; then
+                fmt="all"
+                shift || true
+            fi
+            heading "Exporting Perplexity Pro context..."
+            if [[ "$fmt" == "all" ]]; then
+                run_python_stdin <<PY
+from pathlib import Path
+from signals_lab.utils.context_export import export_all_formats
+
+root = Path("${ROOT}")
+for path in export_all_formats(root=root):
+    print(path)
+PY
+                ok "Wrote docs/PERPLEXITY_CONTEXT.md, .txt, and .pdf"
+            elif [[ "$fmt" == "pdf" ]]; then
+                run_python_stdin <<PY
+from pathlib import Path
+from signals_lab.utils.context_export import export_context_pdf
+
+root = Path("${ROOT}")
+path = export_context_pdf(root=root)
+print(path)
+PY
+                ok "Wrote docs/PERPLEXITY_CONTEXT.pdf"
+            else
+                run_python_stdin <<PY
+from pathlib import Path
+from signals_lab.utils.context_export import export_context
+
+root = Path("${ROOT}")
+path = export_context(root=root, fmt="${fmt}")
+print(path)
+PY
+                ok "Wrote context file"
+            fi
+            echo ""
+            info "Upload to Perplexity Space:"
+            dim "  → Best: docs/PERPLEXITY_CONTEXT.pdf (Perplexity reads PDF reliably)"
+            dim "  → Fallback: docs/PERPLEXITY_CONTEXT.txt"
+            dim "  → Copy docs/PERPLEXITY_SPACE_INSTRUCTIONS.md into Space Instructions"
+            ;;
+        pdf)
+            cmd_context export pdf
+            ;;
+        txt|text)
+            cmd_context export txt
+            ;;
+        path)
+            echo "${ROOT}/docs/PERPLEXITY_CONTEXT.pdf"
+            ;;
+        help|-h|--help)
+            cmd_help context
+            ;;
+        *)
+            err "Unknown context subcommand: $sub (try: export, export pdf, export txt, export all, path)"
+            exit 1
+            ;;
+    esac
+}
+
 # ---------------------------------------------------------------------------
 # Main dispatch
 # ---------------------------------------------------------------------------
@@ -676,6 +860,8 @@ main() {
         signals|signal)       cmd_signals "$@" ;;
         evaluate|eval)        cmd_evaluate "$@" ;;
         api)                  cmd_api "$@" ;;
+        health|signals-health) cmd_health "$@" ;;
+        context|perplexity)  cmd_context "$@" ;;
         db|database)          cmd_db "$@" ;;
         test|tests)           cmd_test "$@" ;;
         lint)                 cmd_lint "$@" ;;

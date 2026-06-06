@@ -3,7 +3,25 @@
 Copy everything below the line into your **signals-lab** Space settings
 (Perplexity → Spaces → signals-lab → Instructions).
 
-Also upload: `docs/PERPLEXITY_CONTEXT.md` (regenerate with `bin/signals-lab context export`).
+Also upload: `docs/PERPLEXITY_CONTEXT.pdf` (PDF is the most reliable format for Perplexity Spaces).
+
+Regenerate with: `bin/signals-lab context export pdf`
+
+---
+
+## If upload fails ("Failed to upload file")
+
+| Cause | Fix |
+|---|---|
+| **`.md` / `.txt` upload fails** | Use `PERPLEXITY_CONTEXT.pdf` (`signals-lab context export pdf`) — Perplexity reads PDF well |
+| **Daily upload cap (Pro = 10/day)** | Wait 24h, or paste into Space Instructions, or upgrade to Max |
+| **Browser glitch** | Try Chrome, disable ad-blocker, or paste file content manually |
+| **File still queued then fails** | Delete queued file, try PDF, or paste `.txt` into Instructions |
+
+**Workaround without file upload:** Copy `docs/PERPLEXITY_CONTEXT.txt` content into Space **Instructions**
+(alongside the instructions below) — works for ~21KB files.
+
+**Does Perplexity read PDF?** Yes — PDF is a primary supported format for Spaces file upload and is indexed for Q&A.
 
 ---
 
