@@ -86,3 +86,8 @@ class FeatureRegistryEntry(BaseModel):
     last_computed_at: Optional[datetime] = None
     computation_count: int = 0
     avg_computation_ms: Optional[int] = None
+
+
+from .market import AssetPair  # noqa: E402
+
+FeatureVector.model_rebuild()

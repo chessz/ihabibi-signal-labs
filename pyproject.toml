@@ -101,9 +101,13 @@ nats = [
 requires = ["setuptools>=69.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -126,20 +130,17 @@ ignore = [
     "C901",  # Too complex (allow for now)
     "T201",  # Print statements (allow in scripts)
 ]
-per-file-ignores = {
-    "tests/*": ["S101", "S106"],  # Allow assert and hardcoded passwords in tests
-    "scripts/*": ["T201", "S101"],
-}
-format = {
-    "quote-style": "double",
-    "indent-style": "space",
-    "indent-width": 4,
-    "line-ending": "lf",
-}
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S106"]
+"scripts/*" = ["T201", "S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
 
 [tool.ruff.lint.isort]
 known-first-party = ["signals_lab"]
-import-headings = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
 [tool.mypy]
 python_version = "3.11"

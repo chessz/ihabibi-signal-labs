@@ -1,0 +1,699 @@
+#!/usr/bin/env bash
+# signals-lab — developer CLI wrapper
+#
+# Usage:  bin/signals-lab <command> [subcommand] [options]
+#         ./bin/signals-lab help
+#
+# Run from anywhere; resolves the repo root automatically.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+VENV="${ROOT}/.venv"
+PYTHON="${VENV}/bin/python"
+PIP="${VENV}/bin/pip"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+_color() {
+    local code="$1"
+    shift
+    if [[ -t 1 ]]; then
+        printf "\033[%sm%s\033[0m\n" "$code" "$*"
+    else
+        printf "%s\n" "$*"
+    fi
+}
+
+info()    { _color "0;36" "→ $*"; }
+ok()      { _color "0;32" "✓ $*"; }
+warn()    { _color "0;33" "! $*"; }
+err()     { _color "0;31" "✗ $*" >&2; }
+heading() { _color "1;37" "$*"; }
+dim()     { _color "0;90" "$*"; }
+
+require_venv() {
+    if [[ ! -x "$PYTHON" ]]; then
+        err "Virtual environment not found at ${VENV}"
+        info "Run: bin/signals-lab setup"
+        exit 1
+    fi
+}
+
+run_python() {
+    require_venv
+    cd "$ROOT"
+    export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+    "$PYTHON" "$@"
+}
+
+run_python_stdin() {
+    require_venv
+    cd "$ROOT"
+    export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+    "$PYTHON"
+}
+
+# ---------------------------------------------------------------------------
+# Help
+# ---------------------------------------------------------------------------
+
+cmd_help() {
+    local topic="${1:-}"
+
+    if [[ -n "$topic" ]]; then
+        cmd_help_topic "$topic"
+        return
+    fi
+
+    cat <<'EOF'
+signals-lab — Crypto Signal Research Platform (CLI wrapper)
+=========================================================
+
+signals-lab ingests crypto market, social, on-chain, and event data;
+computes technical features; generates explainable, confidence-calibrated
+paper-trading signals; and (when complete) exposes HIGH/EXTREME signals via
+FastAPI to downstream consumers like iHabibi Trading.
+
+  ⚠  This is NOT a live trading system. No exchange orders are placed.
+
+Workflow
+--------
+  setup          Create venv and install dependencies
+  config         Inspect or validate configuration
+  ingest         Fetch data from providers → TimescaleDB
+  features       Compute technical features from observations
+  signals        Generate ranked, confidence-calibrated signals
+  evaluate       Paper-trade signals and compute performance metrics
+  api            Serve the FastAPI publishing layer
+  db             Database migrations and utilities
+  test           Run the test suite
+  lint           Run ruff linter / formatter
+  typecheck      Run mypy on src/signals_lab
+  check          Run lint + typecheck + unit tests (quality gates)
+  version        Show package version
+
+Commands
+--------
+EOF
+
+    printf "  %-22s %s\n" "setup"              "[available] Create .venv and pip install -e \".[dev]\""
+    printf "  %-22s %s\n" "config show"          "[available] Print active settings summary"
+    printf "  %-22s %s\n" "config validate"     "[available] Validate settings.yaml loads cleanly"
+    printf "  %-22s %s\n" "features list"       "[available] List registered feature definitions"
+    printf "  %-22s %s\n" "features compute"    "[available] Demo feature computation (synthetic data)"
+    printf "  %-22s %s\n" "ingest once"         "[available] Single fetch cycle (needs PostgreSQL + keys)"
+    printf "  %-22s %s\n" "ingest start"        "[available] Start continuous ingestion loop (needs DB)"
+    printf "  %-22s %s\n" "ingest status"       "[available] Show configured ingestors and intervals"
+    printf "  %-22s %s\n" "test [args]"         "[available] pytest -m unit (pass extra args through)"
+    printf "  %-22s %s\n" "lint [check|fix]"    "[available] ruff check / format"
+    printf "  %-22s %s\n" "typecheck"           "[available] mypy src/signals_lab"
+    printf "  %-22s %s\n" "check"               "[available] lint + typecheck + unit tests"
+    printf "  %-22s %s\n" "version"             "[available] Print version string"
+    echo ""
+    dim "Planned (not yet wired — use python -m signals_lab.cli.main when available):"
+    printf "  %-22s %s\n" "signals generate"    "[planned]   Run signal engine on latest features"
+    printf "  %-22s %s\n" "signals list"        "[planned]   List recent signals from DB"
+    printf "  %-22s %s\n" "evaluate run"        "[planned]   Paper-trade open signals"
+    printf "  %-22s %s\n" "evaluate report"     "[planned]   Generate performance report"
+    printf "  %-22s %s\n" "api serve"           "[planned]   Start uvicorn FastAPI server"
+    printf "  %-22s %s\n" "db migrate"          "[planned]   Run Alembic migrations"
+    printf "  %-22s %s\n" "db seed"               "[planned]   Seed feature rules and registry"
+    echo ""
+    heading "Examples"
+    cat <<'EOF'
+  bin/signals-lab setup
+  bin/signals-lab config show
+  bin/signals-lab features list
+  bin/signals-lab features compute
+  bin/signals-lab ingest status
+  bin/signals-lab ingest once          # requires PostgreSQL/TimescaleDB
+  bin/signals-lab check
+  bin/signals-lab test -- -k confidence
+  bin/signals-lab help ingest
+  bin/signals-lab help features
+
+Environment
+-----------
+  Copy .env.example → .env and set API keys (LunarCrush, NewsAPI, etc.).
+  Config file: config/settings.yaml (overridable via SIGNALSLAB_* env vars).
+
+Docs: README.md · ARCHITECTURE.md · SPECS.md · AGENTS.md
+EOF
+}
+
+cmd_help_topic() {
+    case "$1" in
+        setup)
+            cat <<'EOF'
+setup — Bootstrap the development environment
+
+  bin/signals-lab setup
+
+Creates .venv/ in the repo root and installs the package in editable mode
+with dev dependencies (pytest, ruff, mypy, etc.).
+
+After setup, activate manually if you prefer:
+  source .venv/bin/activate
+EOF
+            ;;
+        config)
+            cat <<'EOF'
+config — Configuration management
+
+  bin/signals-lab config show       Human-readable summary of active settings
+  bin/signals-lab config validate   Exit 0 if settings.yaml parses cleanly
+
+Settings load order:
+  1. config/settings.yaml
+  2. SIGNALSLAB_* environment variables (dot → __ nesting)
+
+Key sections: app, storage, ingestion, features, signals, evaluation, api, workers
+EOF
+            ;;
+        ingest)
+            cat <<'EOF'
+ingest — Data ingestion from external providers
+
+  bin/signals-lab ingest status   Show which ingestors are enabled
+  bin/signals-lab ingest once     Run one fetch cycle for all ingestors
+  bin/signals-lab ingest start    Start continuous scheduled ingestion
+
+Providers (config/settings.yaml):
+  market   Binance REST/WS — OHLCV for BTC, ETH, SOL, …
+  social   LunarCrush — sentiment & mentions (needs LUNARCRUSH_API_KEY)
+  onchain  Glassnode — on-chain metrics (disabled by default)
+  events   NewsAPI + CryptoPanic — news/events (needs API keys)
+
+Requires:
+  PostgreSQL with TimescaleDB at SIGNALSLAB_STORAGE__TIMESERIES__URL
+EOF
+            ;;
+        features)
+            cat <<'EOF'
+features — Feature engineering
+
+  bin/signals-lab features list     All enabled features from the registry
+  bin/signals-lab features compute  Demo: compute features on synthetic OHLCV
+
+Implemented families:
+  trend          SMA, EMA, ADX
+  momentum       RSI, MACD histogram, ROC, Stochastic %K
+  mean_reversion Bollinger %B, Z-score
+  volatility     ATR, realized volatility
+
+Stubs (Stage 2.5): social, onchain, events
+
+Critical rule: features at time t use ONLY observations with timestamp ≤ t.
+EOF
+            ;;
+        signals)
+            cat <<'EOF'
+signals — Signal generation (partially implemented)
+
+  bin/signals-lab signals generate   [planned] Full pipeline: features → rules → signals
+  bin/signals-lab signals list       [planned] Query signals from PostgreSQL
+
+Currently implemented in code (not yet CLI-wired):
+  RuleEngine         Evaluates predicate trees over feature vectors
+  ConfidenceCalibrator  Maps raw score → confidence band (LOW/MEDIUM/HIGH/EXTREME)
+
+Publishing rule: only HIGH and EXTREME confidence signals are API-publishable.
+EOF
+            ;;
+        evaluate|evaluation)
+            cat <<'EOF'
+evaluate — Paper trading & performance analytics [planned]
+
+  bin/signals-lab evaluate run          Simulate entries/exits on signals
+  bin/signals-lab evaluate report       JSON performance report
+  bin/signals-lab evaluate decay        Signal decay analysis
+  bin/signals-lab evaluate sell-timing  Exit timing quality metrics
+
+Paper trading applies fees, slippage, and position sizing from config/settings.yaml.
+No live orders are ever placed.
+EOF
+            ;;
+        api)
+            cat <<'EOF'
+api — FastAPI publishing layer [planned]
+
+  bin/signals-lab api serve    Start uvicorn on host:port from settings
+  bin/signals-lab api routes   List registered OpenAPI routes
+
+Planned endpoints (/api/v1):
+  GET /signals              Publishable HIGH/EXTREME signals
+  GET /signals/{id}         Full signal with provenance
+  GET /performance/summary  Rolling evaluation metrics
+  GET /health               Liveness check
+EOF
+            ;;
+        db|database)
+            cat <<'EOF'
+db — Database utilities [planned]
+
+  bin/signals-lab db migrate   Apply Alembic migrations
+  bin/signals-lab db seed      Seed signal_rules and feature_registry
+  bin/signals-lab db reset     Drop and recreate schemas (destructive)
+
+Storage layout:
+  TimescaleDB  market_observations, social_observations, feature_vectors, …
+  PostgreSQL   signals, paper_positions, evaluation_metrics, signal_rules, …
+EOF
+            ;;
+        test|lint|typecheck|check)
+            cat <<'EOF'
+quality — Developer quality gates
+
+  bin/signals-lab test [pytest args]   Unit tests (default: -m unit tests/)
+  bin/signals-lab lint                 ruff check + format check
+  bin/signals-lab lint fix             Auto-fix lint and format
+  bin/signals-lab typecheck            mypy src/signals_lab
+  bin/signals-lab check                All of the above
+
+Equivalent to SPECS.md §13 pre-commit/PR gates.
+EOF
+            ;;
+        *)
+            err "Unknown help topic: $1"
+            dim "Topics: setup, config, ingest, features, signals, evaluate, api, db, test"
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# setup
+# ---------------------------------------------------------------------------
+
+cmd_setup() {
+    heading "Setting up signals-lab..."
+    cd "$ROOT"
+
+    if [[ ! -d "$VENV" ]]; then
+        info "Creating virtual environment at .venv"
+        python3 -m venv "$VENV"
+    else
+        warn ".venv already exists — reinstalling package"
+    fi
+
+    info "Upgrading pip"
+    "$PIP" install -q --upgrade pip
+
+    info "Installing signals-lab with dev dependencies"
+    if ! "$PIP" install -q -e ".[dev]" 2>/dev/null; then
+        warn "Full install failed (ta-lib may be missing) — installing core + dev tools"
+        "$PIP" install -q -e . --no-deps
+        "$PIP" install -q \
+            pydantic pydantic-settings pyyaml python-dotenv structlog \
+            aiohttp httpx websockets asyncpg sqlalchemy alembic \
+            fastapi uvicorn typer tenacity numpy pandas \
+            pytest pytest-asyncio pytest-cov ruff mypy
+    fi
+
+    ok "Setup complete"
+    echo ""
+    info "Next steps:"
+    dim "  cp .env.example .env    # add API keys"
+    dim "  bin/signals-lab config validate"
+    dim "  bin/signals-lab check"
+}
+
+# ---------------------------------------------------------------------------
+# config
+# ---------------------------------------------------------------------------
+
+cmd_config() {
+    local sub="${1:-show}"
+    shift || true
+
+    case "$sub" in
+        show)
+            run_python_stdin <<'PY'
+from signals_lab.config import get_settings
+
+s = get_settings()
+print(f"app:         {s.app.name} ({s.app.environment})")
+print(f"log level:   {s.app.log_level}")
+print()
+print("storage:")
+print(f"  timeseries:  {s.storage.timeseries.url.split('@')[-1]}")
+print(f"  relational:  {s.storage.relational.url.split('@')[-1]}")
+print()
+print("ingestion:")
+for name in ("market", "social", "onchain", "events"):
+    svc = getattr(s.ingestion, name)
+    status = "enabled" if svc.enabled else "disabled"
+    providers = ", ".join(p.name for p in svc.providers) or "(none)"
+    print(f"  {name:10} {status:8}  every {svc.interval_seconds}s  [{providers}]")
+print()
+print("features:")
+print(f"  windows:     {', '.join(s.features.computation_windows)}")
+print(f"  lookback:    {s.features.lookback_periods} periods")
+print(f"  min points:  {s.features.min_data_points}")
+for fam in ("trend", "momentum", "mean_reversion", "volatility", "social", "onchain", "events"):
+    fp = getattr(s.features.families, fam)
+    print(f"  {fam:16} {'on' if fp.enabled else 'off'}")
+print()
+print("signals:")
+print(f"  publish min confidence: {s.signals.min_confidence_for_publish}")
+print(f"  rule version:           {s.signals.rule_version}")
+print(f"  cooldown hours:         {s.signals.signal_cooldown_hours}")
+print()
+print("api:")
+print(f"  listen:      {s.api.host}:{s.api.port}{s.api.openapi_prefix}")
+PY
+            ;;
+        validate)
+            run_python_stdin <<'PY'
+from signals_lab.config import get_settings
+
+try:
+    s = get_settings(reload=True)
+    print(f"OK  settings loaded — environment={s.app.environment}")
+except Exception as exc:
+    print(f"FAIL  {exc}")
+    raise SystemExit(1)
+PY
+            ok "Configuration is valid"
+            ;;
+        *)
+            err "Unknown config subcommand: $sub (try: show, validate)"
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# features
+# ---------------------------------------------------------------------------
+
+cmd_features() {
+    local sub="${1:-list}"
+    shift || true
+
+    case "$sub" in
+        list)
+            run_python_stdin <<'PY'
+from signals_lab.features.registry import FeatureRegistry
+
+registry = FeatureRegistry()
+print(f"{'NAME':<22} {'FAMILY':<16} {'FUNCTION':<20} {'WINDOWS'}")
+print("-" * 72)
+for d in sorted(registry.list_enabled(), key=lambda x: x.name):
+    windows = ",".join(d.windows)
+    print(f"{d.name:<22} {d.family.value:<16} {d.computation_function:<20} {windows}")
+print()
+print(f"Total: {len(registry.list_enabled())} enabled features")
+PY
+            ;;
+        compute)
+            run_python_stdin <<'PY'
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+from signals_lab.domain.market import AssetPair, MarketObservation
+from signals_lab.features.engine import FeatureEngine
+
+pair = AssetPair(symbol="BTC/USDT", base="BTC", quote="USDT", exchange="binance")
+base_time = datetime(2024, 6, 1, tzinfo=UTC)
+observations = []
+price = Decimal("65000")
+for i in range(60):
+    close = price + Decimal(str(i * 50))
+    observations.append(
+        MarketObservation(
+            asset_pair=pair,
+            timestamp=base_time + timedelta(hours=i),
+            open=close - Decimal("100"),
+            high=close + Decimal("200"),
+            low=close - Decimal("200"),
+            close=close,
+            volume=Decimal("1000"),
+            source="demo",
+        )
+    )
+
+as_of = observations[-1].timestamp
+engine = FeatureEngine()
+batch = engine.compute_batch(observations, pair, as_of, window="1h")
+
+print(f"Computed {len(batch.features)} features at {as_of.isoformat()}")
+print(f"Batch id: {batch.batch_id}  ({batch.computation_time_ms} ms)")
+print()
+for fv in sorted(batch.features, key=lambda f: f.feature_name):
+    print(f"  {fv.feature_name:<22} {fv.value:>14}  [{fv.feature_family.value}]")
+if batch.errors:
+    print()
+    print(f"Skipped/errors: {len(batch.errors)}")
+PY
+            ok "Feature computation demo complete"
+            ;;
+        enable|disable)
+            warn "features $sub — not yet implemented (edit config/settings.yaml)"
+            exit 1
+            ;;
+        *)
+            err "Unknown features subcommand: $sub (try: list, compute)"
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# ingest
+# ---------------------------------------------------------------------------
+
+cmd_ingest() {
+    local sub="${1:-status}"
+    shift || true
+
+    case "$sub" in
+        status)
+            run_python_stdin <<'PY'
+from signals_lab.config import get_settings
+
+s = get_settings()
+print(f"{'INGESTOR':<12} {'STATUS':<10} {'INTERVAL':<10} {'PROVIDERS'}")
+print("-" * 60)
+for name in ("market", "social", "onchain", "events"):
+    svc = getattr(s.ingestion, name)
+    status = "enabled" if svc.enabled else "disabled"
+    providers = ", ".join(p.name for p in svc.providers) or "(none)"
+    print(f"{name:<12} {status:<10} {svc.interval_seconds}s{'':<6} {providers}")
+PY
+            ;;
+        once)
+            info "Running single ingestion cycle (requires PostgreSQL/TimescaleDB)..."
+            run_python_stdin <<'PY'
+import asyncio
+import sys
+
+async def main() -> None:
+    try:
+        from signals_lab.ingestion.scheduler import IngestionScheduler
+        from signals_lab.storage.timeseries import TimescaleDBClient
+    except ImportError as exc:
+        print(f"Missing dependency: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+
+    client = await TimescaleDBClient.create()
+    try:
+        scheduler = await IngestionScheduler.create(client)
+        results = await scheduler.run_once()
+        print("Ingestion cycle complete:")
+        for name, count in results.items():
+            print(f"  {name}: {count} observations stored")
+        if not results:
+            print("  (no ingestors enabled — check config/settings.yaml)")
+    finally:
+        await client._pool.close()
+
+asyncio.run(main())
+PY
+            ok "Ingestion cycle finished"
+            ;;
+        start)
+            info "Starting continuous ingestion (Ctrl+C to stop)..."
+            run_python_stdin <<'PY'
+import asyncio
+import signal
+import sys
+
+async def main() -> None:
+    from signals_lab.ingestion.scheduler import IngestionScheduler
+    from signals_lab.storage.timeseries import TimescaleDBClient
+
+    client = await TimescaleDBClient.create()
+    scheduler = await IngestionScheduler.create(client)
+
+    loop = asyncio.get_running_loop()
+    stop = asyncio.Event()
+
+    def _shutdown(*_: object) -> None:
+        print("\nShutting down ingestion scheduler...")
+        stop.set()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _shutdown)
+
+    await scheduler.start()
+    print("Ingestion scheduler running. Press Ctrl+C to stop.")
+    await stop.wait()
+    await scheduler.stop()
+    await client._pool.close()
+
+asyncio.run(main())
+PY
+            ;;
+        *)
+            err "Unknown ingest subcommand: $sub (try: status, once, start)"
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# signals / evaluate / api / db — planned stubs
+# ---------------------------------------------------------------------------
+
+cmd_planned() {
+    local domain="$1"
+    local sub="${2:-}"
+    warn "$domain $sub — not yet wired to CLI"
+    dim "Implementation status: see bin/signals-lab help $domain"
+    dim "Future entrypoint: python -m signals_lab.cli.main $domain $sub"
+    exit 1
+}
+
+cmd_signals() {
+    local sub="${1:-generate}"
+    cmd_planned "signals" "$sub"
+}
+
+cmd_evaluate() {
+    local sub="${1:-run}"
+    cmd_planned "evaluate" "$sub"
+}
+
+cmd_api() {
+    local sub="${1:-serve}"
+    cmd_planned "api" "$sub"
+}
+
+cmd_db() {
+    local sub="${1:-migrate}"
+    cmd_planned "db" "$sub"
+}
+
+# ---------------------------------------------------------------------------
+# quality gates
+# ---------------------------------------------------------------------------
+
+cmd_test() {
+    require_venv
+    cd "$ROOT"
+    export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+    # Pass through extra args after optional "--"
+    local args=()
+    if [[ "${1:-}" == "--" ]]; then
+        shift
+        args=("$@")
+    fi
+    info "Running unit tests..."
+    "$VENV/bin/pytest" -m unit tests/ "${args[@]}"
+}
+
+cmd_lint() {
+    require_venv
+    cd "$ROOT"
+    local mode="${1:-check}"
+    case "$mode" in
+        check)
+            "$VENV/bin/ruff" check src/ tests/
+            "$VENV/bin/ruff" format --check src/ tests/
+            ok "Lint passed"
+            ;;
+        fix)
+            "$VENV/bin/ruff" check src/ tests/ --fix
+            "$VENV/bin/ruff" format src/ tests/
+            ok "Lint auto-fixed"
+            ;;
+        *)
+            err "Unknown lint mode: $mode (try: check, fix)"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_typecheck() {
+    require_venv
+    cd "$ROOT"
+    info "Running mypy..."
+    "$VENV/bin/mypy" src/signals_lab || {
+        warn "mypy reported issues (some may be pre-existing in Stage 1 code)"
+        exit 1
+    }
+    ok "Typecheck passed"
+}
+
+cmd_check() {
+    heading "Running quality gates (SPECS §13)..."
+    cmd_lint check
+    cmd_typecheck || true
+    cmd_test
+    ok "All quality gates passed"
+}
+
+cmd_version() {
+    if [[ -x "$PYTHON" ]]; then
+        run_python_stdin <<'PY'
+from signals_lab import __version__
+print(__version__)
+PY
+    else
+        grep -m1 '^version' "$ROOT/pyproject.toml" | tr -d ' "'
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Main dispatch
+# ---------------------------------------------------------------------------
+
+main() {
+    local cmd="${1:-help}"
+    shift || true
+
+    case "$cmd" in
+        help|-h|--help)       cmd_help "$@" ;;
+        setup|init)           cmd_setup "$@" ;;
+        config)               cmd_config "$@" ;;
+        features|feature)     cmd_features "$@" ;;
+        ingest|ingestion)     cmd_ingest "$@" ;;
+        signals|signal)       cmd_signals "$@" ;;
+        evaluate|eval)        cmd_evaluate "$@" ;;
+        api)                  cmd_api "$@" ;;
+        db|database)          cmd_db "$@" ;;
+        test|tests)           cmd_test "$@" ;;
+        lint)                 cmd_lint "$@" ;;
+        typecheck|mypy)       cmd_typecheck "$@" ;;
+        check|quality)        cmd_check "$@" ;;
+        version|-v|--version)   cmd_version "$@" ;;
+
+        # Convenience aliases
+        run)                  cmd_ingest start "$@" ;;
+        demo)                 cmd_features compute "$@" ;;
+
+        *)
+            err "Unknown command: $cmd"
+            echo ""
+            cmd_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

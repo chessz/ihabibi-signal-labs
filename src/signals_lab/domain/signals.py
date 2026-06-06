@@ -187,3 +187,10 @@ class SignalOutputBatch(BaseModel):
     @property
     def publishable(self) -> List[Signal]:
         return [s for s in self.signals if s.is_publishable]
+
+
+from .market import AssetPair  # noqa: E402
+
+Signal.model_rebuild()
+SignalCandidate.model_rebuild()
+SignalOutputBatch.model_rebuild()
