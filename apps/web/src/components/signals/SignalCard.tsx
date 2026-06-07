@@ -44,6 +44,13 @@ export function SignalCard({ signal, compact, showBeginner, className }: Props) 
         <p className="mt-3 text-sm text-foreground/90 line-clamp-2">{signal.thesis}</p>
       )}
 
+      {signal.linked_intelligence && signal.linked_intelligence.length > 0 && (
+        <p className="mt-2 text-xs text-primary">
+          📰 {signal.linked_intelligence.length} narrative
+          {signal.linked_intelligence.length === 1 ? "" : "s"}
+        </p>
+      )}
+
       {showBeginner && (
         <p className="mt-2 text-xs text-muted-foreground italic">
           Research idea only — not financial advice or an order to trade.

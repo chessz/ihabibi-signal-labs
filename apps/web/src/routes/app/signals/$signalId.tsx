@@ -3,8 +3,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ConfidenceBadge } from "@/components/signals/ConfidenceBadge";
 import { FreshnessIndicator } from "@/components/signals/FreshnessIndicator";
 import { SignalExplainabilityPanel } from "@/components/signals/SignalExplainabilityPanel";
+import { SignalNewsPanel } from "@/components/signals/SignalNewsPanel";
 import { GlossaryTooltip } from "@/components/glossary/GlossaryTooltip";
-import { getMockSignal } from "@/domain/fixtures/mock-signals";
+import { useSignal } from "@/lib/api/signals";
 
 export const Route = createFileRoute("/app/signals/$signalId")({
   component: SignalDetailPage,
@@ -12,7 +13,11 @@ export const Route = createFileRoute("/app/signals/$signalId")({
 
 function SignalDetailPage() {
   const { signalId } = Route.useParams();
-  const signal = getMockSignal(signalId);
+  const { data: signal, isLoading } = useSignal(signalId);
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading signal…</p>;
+  }
 
   if (!signal) {
     return (
@@ -26,6 +31,7 @@ function SignalDetailPage() {
   }
 
   const ageSeconds = signal.freshness?.signal_age_seconds ?? 0;
+  const linkedNews = signal.linked_intelligence ?? [];
 
   return (
     <article className="space-y-8">
@@ -36,6 +42,9 @@ function SignalDetailPage() {
             <h1 className="text-2xl font-bold">
               {signal.asset_pair.symbol} · {signal.signal_class.replace("_", " ")}
             </h1>
+            {signal.narrative_summary && (
+              <p className="mt-1 text-sm text-muted-foreground">{signal.narrative_summary}</p>
+            )}
           </div>
           <ConfidenceBadge band={signal.confidence_band} score={signal.confidence_score} size="lg" />
         </div>
@@ -56,6 +65,8 @@ function SignalDetailPage() {
         </h2>
         <p className="mt-2 text-lg">{signal.thesis}</p>
       </section>
+
+      <SignalNewsPanel items={linkedNews} />
 
       {signal.beginner_summary && (
         <section className="rounded-lg border border-primary/20 bg-primary/5 p-4">
@@ -98,6 +109,9 @@ function SignalDetailPage() {
           Provenance: rule {signal.provenance.rule_version} · features{" "}
           {signal.provenance.computation_version} · {signal.provenance.input_feature_count}{" "}
           inputs · {signal.provenance.data_sources.join(", ")}
+          {signal.provenance.intelligence_item_ids &&
+            signal.provenance.intelligence_item_ids.length > 0 &&
+            ` · ${signal.provenance.intelligence_item_ids.length} intelligence items`}
         </p>
       </section>
     </article>

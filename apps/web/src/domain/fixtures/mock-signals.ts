@@ -19,7 +19,8 @@ export const mockSignals: Signal[] = [
     expiry_at: new Date(Date.now() + 4 * 60 * 60_000).toISOString(),
     regime: "TRENDING_UP",
     thesis:
-      "Momentum + trend alignment: 4h close above 50 EMA, RSI 62, MACD bullish cross on 1h.",
+      "Momentum + trend alignment: 4h close above 50 EMA, RSI 62, MACD bullish cross on 1h. Institutional BTC narratives add fundamental support.",
+    narrative_summary: "Institutional BTC accumulation + native yield narrative",
     invalidation_condition: "4h close below 50 EMA",
     expected_holding_horizon: "4h",
     entry_price: "67250.00",
@@ -90,6 +91,7 @@ export const mockSignals: Signal[] = [
     generated_at: new Date(Date.now() - 12 * 60_000).toISOString(),
     regime: "RANGING",
     thesis: "Mixed momentum; waiting for breakout confirmation above range high.",
+    narrative_summary: "ETH derivatives positioning narrative",
     invalidation_condition: "Close below range low on 4h",
     expected_holding_horizon: "8h",
     contributing_factors: [],

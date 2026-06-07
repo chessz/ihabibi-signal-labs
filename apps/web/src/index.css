@@ -25,3 +25,12 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}

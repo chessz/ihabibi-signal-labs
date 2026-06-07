@@ -16,9 +16,11 @@ import { Route as AcademyIndexRouteImport } from './routes/academy/index'
 import { Route as AppStrategiesIndexRouteImport } from './routes/app/strategies/index'
 import { Route as AppSignalsIndexRouteImport } from './routes/app/signals/index'
 import { Route as AppSettingsIndexRouteImport } from './routes/app/settings/index'
+import { Route as AppIntelligenceIndexRouteImport } from './routes/app/intelligence/index'
 import { Route as AppHealthIndexRouteImport } from './routes/app/health/index'
 import { Route as AppBacktestsIndexRouteImport } from './routes/app/backtests/index'
 import { Route as AppSignalsSignalIdRouteImport } from './routes/app/signals/$signalId'
+import { Route as AppIntelligenceItemIdRouteImport } from './routes/app/intelligence/$itemId'
 
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
@@ -55,6 +57,11 @@ const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   path: '/settings/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppIntelligenceIndexRoute = AppIntelligenceIndexRouteImport.update({
+  id: '/intelligence/',
+  path: '/intelligence/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppHealthIndexRoute = AppHealthIndexRouteImport.update({
   id: '/health/',
   path: '/health/',
@@ -70,15 +77,22 @@ const AppSignalsSignalIdRoute = AppSignalsSignalIdRouteImport.update({
   path: '/signals/$signalId',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppIntelligenceItemIdRoute = AppIntelligenceItemIdRouteImport.update({
+  id: '/intelligence/$itemId',
+  path: '/intelligence/$itemId',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
   '/academy/': typeof AcademyIndexRoute
   '/status/': typeof StatusIndexRoute
+  '/app/intelligence/$itemId': typeof AppIntelligenceItemIdRoute
   '/app/signals/$signalId': typeof AppSignalsSignalIdRoute
   '/app/backtests/': typeof AppBacktestsIndexRoute
   '/app/health/': typeof AppHealthIndexRoute
+  '/app/intelligence/': typeof AppIntelligenceIndexRoute
   '/app/settings/': typeof AppSettingsIndexRoute
   '/app/signals/': typeof AppSignalsIndexRoute
   '/app/strategies/': typeof AppStrategiesIndexRoute
@@ -88,9 +102,11 @@ export interface FileRoutesByTo {
   '/app': typeof AppRouteRouteWithChildren
   '/academy': typeof AcademyIndexRoute
   '/status': typeof StatusIndexRoute
+  '/app/intelligence/$itemId': typeof AppIntelligenceItemIdRoute
   '/app/signals/$signalId': typeof AppSignalsSignalIdRoute
   '/app/backtests': typeof AppBacktestsIndexRoute
   '/app/health': typeof AppHealthIndexRoute
+  '/app/intelligence': typeof AppIntelligenceIndexRoute
   '/app/settings': typeof AppSettingsIndexRoute
   '/app/signals': typeof AppSignalsIndexRoute
   '/app/strategies': typeof AppStrategiesIndexRoute
@@ -101,9 +117,11 @@ export interface FileRoutesById {
   '/app': typeof AppRouteRouteWithChildren
   '/academy/': typeof AcademyIndexRoute
   '/status/': typeof StatusIndexRoute
+  '/app/intelligence/$itemId': typeof AppIntelligenceItemIdRoute
   '/app/signals/$signalId': typeof AppSignalsSignalIdRoute
   '/app/backtests/': typeof AppBacktestsIndexRoute
   '/app/health/': typeof AppHealthIndexRoute
+  '/app/intelligence/': typeof AppIntelligenceIndexRoute
   '/app/settings/': typeof AppSettingsIndexRoute
   '/app/signals/': typeof AppSignalsIndexRoute
   '/app/strategies/': typeof AppStrategiesIndexRoute
@@ -115,9 +133,11 @@ export interface FileRouteTypes {
     | '/app'
     | '/academy/'
     | '/status/'
+    | '/app/intelligence/$itemId'
     | '/app/signals/$signalId'
     | '/app/backtests/'
     | '/app/health/'
+    | '/app/intelligence/'
     | '/app/settings/'
     | '/app/signals/'
     | '/app/strategies/'
@@ -127,9 +147,11 @@ export interface FileRouteTypes {
     | '/app'
     | '/academy'
     | '/status'
+    | '/app/intelligence/$itemId'
     | '/app/signals/$signalId'
     | '/app/backtests'
     | '/app/health'
+    | '/app/intelligence'
     | '/app/settings'
     | '/app/signals'
     | '/app/strategies'
@@ -139,9 +161,11 @@ export interface FileRouteTypes {
     | '/app'
     | '/academy/'
     | '/status/'
+    | '/app/intelligence/$itemId'
     | '/app/signals/$signalId'
     | '/app/backtests/'
     | '/app/health/'
+    | '/app/intelligence/'
     | '/app/settings/'
     | '/app/signals/'
     | '/app/strategies/'
@@ -205,6 +229,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/intelligence/': {
+      id: '/app/intelligence/'
+      path: '/intelligence'
+      fullPath: '/app/intelligence/'
+      preLoaderRoute: typeof AppIntelligenceIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/health/': {
       id: '/app/health/'
       path: '/health'
@@ -226,22 +257,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSignalsSignalIdRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/intelligence/$itemId': {
+      id: '/app/intelligence/$itemId'
+      path: '/intelligence/$itemId'
+      fullPath: '/app/intelligence/$itemId'
+      preLoaderRoute: typeof AppIntelligenceItemIdRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
   }
 }
 
 interface AppRouteRouteChildren {
+  AppIntelligenceItemIdRoute: typeof AppIntelligenceItemIdRoute
   AppSignalsSignalIdRoute: typeof AppSignalsSignalIdRoute
   AppBacktestsIndexRoute: typeof AppBacktestsIndexRoute
   AppHealthIndexRoute: typeof AppHealthIndexRoute
+  AppIntelligenceIndexRoute: typeof AppIntelligenceIndexRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
   AppSignalsIndexRoute: typeof AppSignalsIndexRoute
   AppStrategiesIndexRoute: typeof AppStrategiesIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppIntelligenceItemIdRoute: AppIntelligenceItemIdRoute,
   AppSignalsSignalIdRoute: AppSignalsSignalIdRoute,
   AppBacktestsIndexRoute: AppBacktestsIndexRoute,
   AppHealthIndexRoute: AppHealthIndexRoute,
+  AppIntelligenceIndexRoute: AppIntelligenceIndexRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
   AppSignalsIndexRoute: AppSignalsIndexRoute,
   AppStrategiesIndexRoute: AppStrategiesIndexRoute,

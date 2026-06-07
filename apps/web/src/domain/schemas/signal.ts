@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { linkedIntelligenceSchema } from "@/domain/schemas/intelligence";
+
 export const confidenceBandSchema = z.enum([
   "LOW",
   "MEDIUM",
@@ -40,6 +42,8 @@ export const contributingFactorSchema = z.object({
   direction: z.enum(["bullish", "bearish", "neutral"]),
   description: z.string(),
   z_score: z.string().optional(),
+  source_type: z.enum(["feature", "intelligence"]).default("feature"),
+  intelligence_item_id: z.string().uuid().optional(),
 });
 
 export const provenanceSchema = z.object({
@@ -50,6 +54,7 @@ export const provenanceSchema = z.object({
   generated_by: z.string(),
   input_feature_count: z.number(),
   computation_time_ms: z.number().optional(),
+  intelligence_item_ids: z.array(z.string().uuid()).optional(),
 });
 
 export const signalSchema = z.object({
@@ -95,6 +100,8 @@ export const signalSchema = z.object({
     .optional(),
   status: z.enum(["ACTIVE", "EXPIRED", "INVALIDATED", "CLOSED"]),
   schema_version: z.string().optional(),
+  narrative_summary: z.string().optional(),
+  linked_intelligence: z.array(linkedIntelligenceSchema).optional(),
 });
 
 export type Signal = z.infer<typeof signalSchema>;
@@ -112,6 +119,8 @@ export const signalListItemSchema = signalSchema.pick({
   is_publishable: true,
   regime: true,
   thesis: true,
+  linked_intelligence: true,
+  narrative_summary: true,
 });
 
 export type SignalListItem = z.infer<typeof signalListItemSchema>;

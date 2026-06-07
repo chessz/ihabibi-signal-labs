@@ -1,20 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-
-import { SignalCard } from "@/components/signals/SignalCard";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { mockSignals } from "@/domain/fixtures/mock-signals";
 import { Radio } from "lucide-react";
+
+import { SignalCard, SignalCardSkeleton } from "@/components/signals/SignalCard";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { useSignals } from "@/lib/api/signals";
 
 export const Route = createFileRoute("/app/signals/")({
   component: SignalsPage,
 });
 
 function SignalsPage() {
-  // TODO [Stage 3]: Replace with useSignals() TanStack Query hook
   const publishableOnly = false;
-  const signals = publishableOnly
-    ? mockSignals.filter((s) => s.is_publishable)
-    : mockSignals;
+  const { data: signals = [], isLoading } = useSignals(publishableOnly);
 
   return (
     <div>
@@ -32,7 +29,15 @@ function SignalsPage() {
         </label>
       </header>
 
-      {signals.length === 0 ? (
+      {isLoading ? (
+        <ul className="grid gap-4 md:grid-cols-2">
+          {[1, 2].map((n) => (
+            <li key={n}>
+              <SignalCardSkeleton />
+            </li>
+          ))}
+        </ul>
+      ) : signals.length === 0 ? (
         <EmptyState
           icon={Radio}
           title="No signals in this view"

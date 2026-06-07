@@ -146,7 +146,7 @@ EOF
     printf "  %-22s %s\n" "signals list"        "[planned]   List recent signals from DB"
     printf "  %-22s %s\n" "evaluate run"        "[planned]   Paper-trade open signals"
     printf "  %-22s %s\n" "evaluate report"     "[planned]   Generate performance report"
-    printf "  %-22s %s\n" "api serve"           "[planned]   Start uvicorn FastAPI server"
+    printf "  %-22s %s\n" "api serve"           "[available] Start uvicorn FastAPI server"
     printf "  %-22s %s\n" "db migrate"          "[planned]   Run Alembic migrations"
     printf "  %-22s %s\n" "db seed"               "[planned]   Seed feature rules and registry"
     echo ""
@@ -773,7 +773,11 @@ cmd_api() {
             cmd_health "apis" "$@"
             ;;
         serve|routes)
-            cmd_planned "api" "$sub"
+            info "Starting FastAPI on http://${SIGNALS_LAB_API_HOST:-0.0.0.0}:${SIGNALS_LAB_API_PORT:-8000}"
+            exec "$PYTHON" -m uvicorn signals_lab.api.app:app \
+                --host "${SIGNALS_LAB_API_HOST:-0.0.0.0}" \
+                --port "${SIGNALS_LAB_API_PORT:-8000}" \
+                --reload
             ;;
         *)
             err "Unknown api subcommand: $sub (try: health, serve, routes)"

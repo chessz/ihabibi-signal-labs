@@ -27,6 +27,8 @@ class ContributingFactor(BaseModel):
     direction: str = Field(..., description="bullish, bearish, neutral")
     description: str
     z_score: Optional[Decimal] = None
+    source_type: str = Field(default="feature", description="feature or intelligence")
+    intelligence_item_id: Optional[UUID] = None
 
 
 class StopLogic(BaseModel):
@@ -60,6 +62,7 @@ class ProvenanceRecord(BaseModel):
     generated_by: str = Field(default="signal-engine")
     input_feature_count: int = 0
     computation_time_ms: Optional[int] = None
+    intelligence_item_ids: List[UUID] = Field(default_factory=list)
 
 
 class Signal(BaseModel):

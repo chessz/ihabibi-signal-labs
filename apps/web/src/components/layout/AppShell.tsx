@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
 
+import { NewsTicker } from "@/components/intelligence/NewsTicker";
+
 const navItems = [
   { to: "/app/signals", label: "Signals" },
+  { to: "/app/intelligence", label: "Intelligence" },
   { to: "/app/health", label: "Health" },
   { to: "/app/backtests", label: "Backtests" },
   { to: "/app/strategies", label: "Strategies" },
@@ -28,6 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
         </div>
+        <NewsTicker />
       </header>
       <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
     </div>
