@@ -124,8 +124,12 @@ check_postgres_hint() {
         ok "psql found (PostgreSQL client)"
     else
         warn "psql not found — ingestion/API need PostgreSQL + TimescaleDB"
-        _cyan "  Docker: docker run -d --name signals-pg -e POSTGRES_PASSWORD=postgres \\"
-        _cyan "    -p 5432:5432 timescale/timescaledb:latest-pg16"
+    fi
+    if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+        ok "Docker available — run: signals-lab web docker up"
+    else
+        _cyan "  Docker: signals-lab web docker up"
+        _cyan "  Or: docker compose up -d db  (see docker-compose.yml)"
     fi
 }
 
@@ -217,9 +221,15 @@ print_next_steps() {
     echo "  signals-lab check               # run tests"
     echo ""
     _cyan "For ingestion (needs PostgreSQL/TimescaleDB):"
+    echo "  signals-lab web docker up       # or: docker compose up -d db"
     echo "  signals-lab ingest status"
     echo "  signals-lab ingest once"
     echo "  signals-lab run                 # alias for ingest start"
+    echo ""
+    _cyan "For the web dashboard (apps/web):"
+    echo "  signals-lab web setup           # first time"
+    echo "  signals-lab web refresh         # after git pull / dep changes"
+    echo "  signals-lab web dev             # http://localhost:5173"
     echo ""
     warn "Ingestion requires databases at the URLs in .env / config/settings.yaml"
 }

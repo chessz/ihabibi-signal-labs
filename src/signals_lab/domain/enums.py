@@ -69,6 +69,7 @@ class ObservationType(str, Enum):
     ONCHAIN = "onchain"
     EVENTS = "events"
     FEATURES = "features"
+    INTELLIGENCE = "intelligence"
 
 
 class ProviderStatus(str, Enum):

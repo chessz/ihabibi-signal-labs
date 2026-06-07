@@ -4,9 +4,32 @@ React + TypeScript frontend for the signals-lab research platform.
 
 **Stack:** Vite · TanStack Router · TanStack Query · Tailwind v4 · Supabase Auth (Stage 3)
 
-**Full product/UX plan:** [`docs/FRONTEND_PRODUCT_PLAN.md`](../../docs/FRONTEND_PRODUCT_PLAN.md)
+**Full product/UX plan:** [`docs/FRONTEND_PRODUCT_PLAN.md`](../../docs/FRONTEND_PRODUCT_PLAN.md)  
+**Deployment (when to use Vercel / Fly / Supabase):** [`docs/DEPLOYMENT.md`](../../docs/DEPLOYMENT.md)
 
 ## Quick start
+
+```bash
+# From repo root (recommended)
+export PATH="$(pwd)/bin:$PATH"
+signals-lab web setup              # npm install + .env.local
+signals-lab web dev                # http://localhost:5173
+
+# After git pull or when deps/env change:
+signals-lab web refresh
+signals-lab web refresh --docker   # also restart Postgres container
+signals-lab web refresh --force    # reinstall + clear Vite cache
+```
+
+Or use the script directly: `./scripts/web-dev.sh refresh`
+
+**Local database (optional, for ingestion):**
+
+```bash
+signals-lab web docker up          # TimescaleDB on localhost:5432
+```
+
+Manual path:
 
 ```bash
 cd apps/web
@@ -14,8 +37,6 @@ cp .env.example .env.local
 npm install
 npm run dev
 ```
-
-Open http://localhost:5173
 
 ## Routes (MVP scaffold)
 

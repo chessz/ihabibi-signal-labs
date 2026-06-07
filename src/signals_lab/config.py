@@ -74,6 +74,8 @@ class ProviderConfig(BaseModel):
 
     name: str
     type: str = "rest"
+    enabled: bool = True
+    tier: str = "A"
     base_url: Optional[str] = None
     symbols: List[str] = Field(default_factory=list)
     assets: List[str] = Field(default_factory=list)
@@ -109,6 +111,7 @@ class IngestionSettings(BaseModel):
     social: IngestionServiceSettings = Field(default_factory=IngestionServiceSettings)
     onchain: IngestionServiceSettings = Field(default_factory=IngestionServiceSettings)
     events: IngestionServiceSettings = Field(default_factory=IngestionServiceSettings)
+    intelligence: IngestionServiceSettings = Field(default_factory=IngestionServiceSettings)
 
 
 class FeatureFamilyParams(BaseModel):

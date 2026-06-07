@@ -1,0 +1,26 @@
+# Local TimescaleDB for signals-lab development.
+# Start:  ./scripts/web-dev.sh docker up   (or: signals-lab web docker up)
+# Stop:   ./scripts/web-dev.sh docker down
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: signals-lab-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - signals_pg_data:/var/lib/postgresql/data
+      - ./scripts/docker/init-databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  signals_pg_data:

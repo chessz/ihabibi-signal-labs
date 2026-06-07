@@ -1,0 +1,72 @@
+# Tier A RSS feeds — primary crypto news base layer (no API keys required).
+# Credibility: editorial prior 0–1; Tier C scorer may adjust at runtime.
+
+rss_feeds:
+  - id: coindesk
+    url: https://www.coindesk.com/arc/outboundfeeds/rss/
+    original_source: CoinDesk
+    credibility: 0.85
+    source_type: news
+  - id: cointelegraph
+    url: https://cointelegraph.com/rss
+    original_source: CoinTelegraph
+    credibility: 0.75
+    source_type: news
+  - id: decrypt
+    url: https://decrypt.co/feed
+    original_source: Decrypt
+    credibility: 0.78
+    source_type: news
+  - id: blockworks
+    url: https://blockworks.co/feed
+    original_source: Blockworks
+    credibility: 0.80
+    source_type: news
+  - id: bitcoinmagazine
+    url: https://bitcoinmagazine.com/.rss/full/
+    original_source: Bitcoin Magazine
+    credibility: 0.82
+    source_type: news
+
+# Asset keyword hints for tag extraction (uppercase tickers)
+asset_keywords:
+  BTC: ["bitcoin", "btc", "satoshi"]
+  ETH: ["ethereum", "eth", "ether"]
+  SOL: ["solana", "sol"]
+  BNB: ["bnb", "binance coin"]
+  XRP: ["xrp", "ripple"]
+  ADA: ["cardano", "ada"]
+  DOGE: ["dogecoin", "doge"]
+  AVAX: ["avalanche", "avax"]
+
+# Tier B enrichers — pipeline continues when unavailable
+tier_b_enrichers:
+  - newsapi
+  - lunarcrush
+  - glassnode
+
+fallbacks:
+  cryptocurrency_cv:
+    on_down: rss_fan_in
+  newsapi:
+    on_down: skip_enrich
+  lunarcrush:
+    on_down: skip_enrich
+
+fusion_weights:
+  credibility: 0.20
+  relevance: 0.15
+  novelty: 0.15
+  social_velocity: 0.15
+  confirmation: 0.20
+  market_confirmation: 0.25
+
+dedup:
+  title_similarity_window_hours: 24
+
+clickbait_patterns:
+  - "you won't believe"
+  - "shocking"
+  - "goes parabolic"
+  - "100x"
+  - "urgent:"

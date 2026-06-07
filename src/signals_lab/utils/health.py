@@ -106,6 +106,8 @@ class HealthChecker:
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
             tasks: list[tuple[str, Callable[[httpx.AsyncClient], Coroutine[object, object, HealthCheckResult]]]] = [
                 ("binance", self._check_binance),
+                ("cryptocurrency_cv", self._check_cryptocurrency_cv),
+                ("rss_fan_in", self._check_rss_fan_in),
                 ("newsapi", self._check_newsapi),
                 ("lunarcrush", self._check_lunarcrush),
                 ("glassnode", self._check_glassnode),
@@ -172,7 +174,12 @@ class HealthChecker:
 
     async def _check_newsapi(self, client: httpx.AsyncClient) -> HealthCheckResult:  # noqa: PLR0911
         if not self._settings.ingestion.events.enabled:
-            return HealthCheckResult("newsapi", "api", HealthStatus.SKIP, "events ingestion disabled")
+            return HealthCheckResult(
+                "newsapi",
+                "api",
+                HealthStatus.SKIP,
+                "Tier B enricher — events ingestion disabled (intelligence pipeline is primary)",
+            )
 
         api_key = None
         for provider in self._settings.ingestion.events.providers:
@@ -208,7 +215,12 @@ class HealthChecker:
 
     async def _check_lunarcrush(self, client: httpx.AsyncClient) -> HealthCheckResult:  # noqa: PLR0911
         if not self._settings.ingestion.social.enabled:
-            return HealthCheckResult("lunarcrush", "api", HealthStatus.SKIP, "social ingestion disabled")
+            return HealthCheckResult(
+                "lunarcrush",
+                "api",
+                HealthStatus.SKIP,
+                "Tier B enricher — social ingestion disabled (intelligence pipeline is primary)",
+            )
 
         api_key = None
         for provider in self._settings.ingestion.social.providers:
@@ -244,6 +256,82 @@ class HealthChecker:
             return HealthCheckResult("lunarcrush", "api", HealthStatus.FAIL, f"HTTP {status_code}", latency_ms)
         except httpx.HTTPError as exc:
             return HealthCheckResult("lunarcrush", "api", HealthStatus.FAIL, str(exc))
+
+    async def _check_cryptocurrency_cv(self, client: httpx.AsyncClient) -> HealthCheckResult:
+        if not self._settings.ingestion.intelligence.enabled:
+            return HealthCheckResult("cryptocurrency_cv", "api", HealthStatus.SKIP, "intelligence ingestion disabled")
+
+        base_url = "https://cryptocurrency.cv"
+        for provider in self._settings.ingestion.intelligence.providers:
+            if provider.name == "cryptocurrency_cv" and provider.base_url:
+                base_url = provider.base_url.rstrip("/")
+                if not getattr(provider, "enabled", True):
+                    return HealthCheckResult("cryptocurrency_cv", "api", HealthStatus.SKIP, "provider disabled")
+                break
+        else:
+            return HealthCheckResult("cryptocurrency_cv", "api", HealthStatus.SKIP, "not configured")
+
+        try:
+            status_code, latency_ms = await _timed_request(
+                client, "GET", f"{base_url}/api/health"
+            )
+            if status_code == _HTTP_OK:
+                return HealthCheckResult(
+                    "cryptocurrency_cv", "api", HealthStatus.OK, "Tier A news OK", latency_ms
+                )
+            # Fallback probe
+            status_code, latency_ms = await _timed_request(
+                client, "GET", f"{base_url}/api/news", params={"limit": 1}
+            )
+            if status_code == _HTTP_OK:
+                return HealthCheckResult(
+                    "cryptocurrency_cv", "api", HealthStatus.OK, "Tier A news OK", latency_ms
+                )
+            return HealthCheckResult(
+                "cryptocurrency_cv", "api", HealthStatus.WARN, f"HTTP {status_code}", latency_ms
+            )
+        except httpx.HTTPError as exc:
+            return HealthCheckResult("cryptocurrency_cv", "api", HealthStatus.WARN, str(exc))
+
+    async def _check_rss_fan_in(self, client: httpx.AsyncClient) -> HealthCheckResult:
+        if not self._settings.ingestion.intelligence.enabled:
+            return HealthCheckResult("rss_fan_in", "api", HealthStatus.SKIP, "intelligence ingestion disabled")
+
+        from signals_lab.intelligence.config_loader import get_intelligence_config
+
+        feeds = [f for f in get_intelligence_config().rss_feeds if f.enabled]
+        if not feeds:
+            return HealthCheckResult("rss_fan_in", "api", HealthStatus.SKIP, "no RSS feeds configured")
+
+        ok_count = 0
+        last_latency = 0
+        errors: list[str] = []
+        for feed in feeds[:3]:
+            try:
+                status_code, latency_ms = await _timed_request(client, "GET", feed.url)
+                last_latency = latency_ms
+                if status_code == _HTTP_OK:
+                    ok_count += 1
+                else:
+                    errors.append(f"{feed.id}: HTTP {status_code}")
+            except httpx.HTTPError as exc:
+                errors.append(f"{feed.id}: {exc}")
+
+        if ok_count == len(feeds[:3]):
+            return HealthCheckResult(
+                "rss_fan_in", "api", HealthStatus.OK, f"Tier A RSS OK ({ok_count} feeds)", last_latency
+            )
+        if ok_count > 0:
+            return HealthCheckResult(
+                "rss_fan_in",
+                "api",
+                HealthStatus.WARN,
+                f"partial RSS ({ok_count}/{len(feeds[:3])}): {'; '.join(errors[:2])}",
+                last_latency,
+            )
+        return HealthCheckResult(
+            "rss_fan_in", "api", HealthStatus.WARN, "; ".join(errors[:3]) or "all feeds failed"
+        )
 
     async def _check_glassnode(self, client: httpx.AsyncClient) -> HealthCheckResult:
         if not self._settings.ingestion.onchain.enabled:

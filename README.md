@@ -23,7 +23,9 @@ Ingestion Workers → Time-Series Storage → Feature Engine → Signal Engine �
 - **Evaluation**: Full paper trading with win rate, expectancy, profit factor, decay analysis
 - **API**: FastAPI with signal publishing, performance metrics, health checks
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design document.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design document.  
+Deployment (local → Fly → Vercel → Supabase): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).  
+Multi-source intelligence pipeline (news/social/market fusion): [docs/INTELLIGENCE_PIPELINE.md](docs/INTELLIGENCE_PIPELINE.md).
 
 ## Quick Start
 

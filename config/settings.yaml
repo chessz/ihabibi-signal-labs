@@ -47,7 +47,7 @@ ingestion:
         rate_limit_per_minute: 1200
         websocket_enabled: true
   social:
-    enabled: true
+    enabled: false  # Tier B LunarCrush — replaced by intelligence pipeline (Reddit in Stage 3)
     interval_seconds: 300
     batch_size: 50
     timeout_seconds: 30
@@ -55,6 +55,8 @@ ingestion:
     retry_backoff_seconds: 10
     providers:
       - name: "lunarcrush"
+        enabled: false
+        tier: "B"
         type: "rest"
         base_url: "https://api.lunarcrush.com/v2"
         api_key_env: "LUNARCRUSH_API_KEY"
@@ -78,7 +80,7 @@ ingestion:
           - "market/price_usd_close"
     # Glassnode, Nansen, etc. - enable when API keys available
   events:
-    enabled: true
+    enabled: false  # Legacy mock/events — use ingestion.intelligence instead
     interval_seconds: 300
     batch_size: 100
     timeout_seconds: 30
@@ -86,6 +88,8 @@ ingestion:
     retry_backoff_seconds: 10
     providers:
       - name: "newsapi"
+        enabled: false
+        tier: "B"
         type: "rest"
         base_url: "https://newsapi.org/v2"
         api_key_env: "NEWSAPI_KEY"
@@ -93,11 +97,33 @@ ingestion:
         language: "en"
         page_size: 50
       - name: "cryptopanic"
+        enabled: false
+        tier: "B"
         type: "rest"
         base_url: "https://cryptopanic.com/api/v1"
         api_key_env: "CRYPTOPANIC_API_KEY"
         filter: "hot"
         public: "true"
+  intelligence:
+    enabled: true
+    interval_seconds: 300
+    batch_size: 200
+    timeout_seconds: 45
+    retry_attempts: 3
+    retry_backoff_seconds: 10
+    providers:
+      - name: "cryptocurrency_cv"
+        enabled: true
+        tier: "A"
+        type: "rest"
+        base_url: "https://cryptocurrency.cv"
+        page_size: 30
+        rate_limit_per_minute: 100
+      - name: "rss_fan_in"
+        enabled: true
+        tier: "A"
+        type: "rss"
+        rate_limit_per_minute: 60
 
 features:
   computation_windows: ["1h", "4h", "1d"]

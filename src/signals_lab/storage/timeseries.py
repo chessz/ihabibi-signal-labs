@@ -24,6 +24,7 @@ OBSERVATION_TABLE_MAP: Dict[ObservationType, str] = {
     ObservationType.ONCHAIN: "onchain_observations",
     ObservationType.EVENTS: "event_observations",
     ObservationType.FEATURES: "feature_vectors",
+    ObservationType.INTELLIGENCE: "intelligence_items",
 }
 
 
@@ -237,6 +238,8 @@ class TimescaleDBClient(TimeSeriesRepository):
         """Extract normalized symbol from observation data."""
         if hasattr(data, "asset_pair"):
             return data.asset_pair.normalized_symbol
+        if hasattr(data, "asset_tags") and data.asset_tags:
+            return str(data.asset_tags[0])
         if hasattr(data, "symbol"):
             return data.symbol
         return "unknown"
@@ -244,6 +247,8 @@ class TimescaleDBClient(TimeSeriesRepository):
     @staticmethod
     def _extract_exchange(data: Any) -> str:
         """Extract exchange from observation data."""
+        if hasattr(data, "exchange"):
+            return str(data.exchange)
         if hasattr(data, "asset_pair"):
             return data.asset_pair.exchange
         return "unknown"

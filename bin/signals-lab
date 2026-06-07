@@ -10,6 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+WEB_SCRIPT="${ROOT}/scripts/web-dev.sh"
 VENV="${ROOT}/.venv"
 PYTHON="${VENV}/bin/python"
 PIP="${VENV}/bin/pip"
@@ -112,6 +113,7 @@ Workflow
   check          Run lint + typecheck + unit tests (quality gates)
   health         Test API keys, providers, RSS feeds, and databases
   context        Export unified spec for Perplexity Pro / external LLMs
+  web            Frontend setup, refresh, dev server, Docker DB
   version        Show package version
 
 Commands
@@ -131,8 +133,12 @@ EOF
     printf "  %-22s %s\n" "typecheck"           "[available] mypy src/signals_lab"
     printf "  %-22s %s\n" "check"               "[available] lint + typecheck + unit tests"
     printf "  %-22s %s\n" "health [apis|db]"    "[available] Test API keys, RSS feeds, databases"
+    printf "  %-22s %s\n" "intelligence fetch"   "[available] Tier A news pipeline (no DB)"
     printf "  %-22s %s\n" "api health"           "[available] External API connectivity only"
     printf "  %-22s %s\n" "context export"       "[available] Build docs/PERPLEXITY_CONTEXT.md for Perplexity Pro"
+    printf "  %-22s %s\n" "web dev"              "[available] Vite dashboard at http://localhost:5173"
+    printf "  %-22s %s\n" "web refresh"            "[available] After git pull / npm or env changes"
+    printf "  %-22s %s\n" "web docker up"          "[available] Start TimescaleDB (docker compose)"
     printf "  %-22s %s\n" "version"             "[available] Print version string"
     echo ""
     dim "Planned (not yet wired — use python -m signals_lab.cli.main when available):"
@@ -154,6 +160,9 @@ EOF
   signals-lab health                  # test APIs + DB
   signals-lab health apis             # APIs/RSS only (no DB required)
   signals-lab context export          # Perplexity Pro unified spec
+  signals-lab web setup               # first-time frontend + optional Docker
+  signals-lab web refresh --docker    # after pull: npm, cache, restart DB
+  signals-lab web dev                   # Vite dashboard
   signals-lab ingest once             # needs PostgreSQL/TimescaleDB
   signals-lab help ingest
 EOF
@@ -316,6 +325,33 @@ Workflow:
 If upload fails: paste .txt content into Space Instructions instead.
 EOF
             ;;
+        web|frontend|dashboard)
+            cat <<'EOF'
+web — Frontend dashboard (apps/web) + local Docker Postgres
+
+  signals-lab web setup              npm install + .env.local
+  signals-lab web setup --docker     Also start TimescaleDB container
+  signals-lab web refresh            After git pull or package.json changes
+  signals-lab web refresh --docker   Refresh + restart Postgres
+  signals-lab web refresh --force    Reinstall deps + clear Vite cache
+  signals-lab web refresh --restart-dev   Free port 5173 if dev server stuck
+  signals-lab web dev                Start Vite (http://localhost:5173)
+  signals-lab web build              Production build
+  signals-lab web check              Verify Node, deps, Docker
+  signals-lab web docker up          Start TimescaleDB (signals_ts, signals_rel)
+  signals-lab web docker down        Stop container
+  signals-lab web docker restart     Restart DB (use when .env DB URLs change)
+  signals-lab web docker status      Container status
+
+When to run refresh:
+  • After git pull that touches apps/web/package.json or package-lock.json
+  • After apps/web/.env.example changes (review .env.local)
+  • When Vite shows stale modules or HMR stops working (--force)
+  • When Postgres connection fails after Docker sleep (--docker)
+
+Script: scripts/web-dev.sh (same commands without signals-lab prefix)
+EOF
+            ;;
         db|database)
             cat <<'EOF'
 db — Database utilities [planned]
@@ -412,7 +448,7 @@ print(f"  timeseries:  {s.storage.timeseries.url.split('@')[-1]}")
 print(f"  relational:  {s.storage.relational.url.split('@')[-1]}")
 print()
 print("ingestion:")
-for name in ("market", "social", "onchain", "events"):
+for name in ("market", "social", "onchain", "events", "intelligence"):
     svc = getattr(s.ingestion, name)
     status = "enabled" if svc.enabled else "disabled"
     providers = ", ".join(p.name for p in svc.providers) or "(none)"
@@ -532,6 +568,87 @@ PY
 }
 
 # ---------------------------------------------------------------------------
+# intelligence — Tier A multi-source pipeline (no DB required for fetch)
+# ---------------------------------------------------------------------------
+
+cmd_intelligence() {
+    require_deps
+    local sub="${1:-fetch}"
+    shift || true
+
+    case "$sub" in
+        fetch|run|once)
+            heading "Fetching intelligence (Tier A providers)..."
+            run_python_stdin <<'PY'
+import asyncio
+import json
+
+from signals_lab.ingestion.intelligence_ingestor import IntelligenceIngestor
+
+
+async def main() -> None:
+    ingestor = IntelligenceIngestor.from_settings()
+    await ingestor.start()
+    try:
+        items = await ingestor.fetch_all()
+    finally:
+        await ingestor.stop()
+
+    print(f"Intelligence items: {len(items)}")
+    multi = sum(1 for i in items if i.cross_source_confirmation_count >= 2)
+    print(f"Multi-source confirmed: {multi}")
+    for item in items[:10]:
+        print(
+            json.dumps(
+                {
+                    "title": item.title[:80],
+                    "provider": item.provider,
+                    "sources": item.confirming_providers,
+                    "confirmation": item.cross_source_confirmation_count,
+                    "credibility": str(item.credibility_score),
+                    "assets": item.asset_tags,
+                },
+                default=str,
+            )
+        )
+
+
+asyncio.run(main())
+PY
+            ;;
+        status)
+            run_python_stdin <<'PY'
+from signals_lab.config import get_settings
+from signals_lab.intelligence.config_loader import get_intelligence_config
+
+s = get_settings()
+svc = s.ingestion.intelligence
+print(f"intelligence: {'enabled' if svc.enabled else 'disabled'} ({svc.interval_seconds}s)")
+for p in svc.providers:
+    en = getattr(p, "enabled", True)
+    print(f"  - {p.name} tier={getattr(p, 'tier', '?')} enabled={en}")
+cfg = get_intelligence_config()
+print(f"RSS feeds configured: {len(cfg.rss_feeds)}")
+PY
+            ;;
+        help|-h|--help)
+            cat <<'EOF'
+intelligence — Multi-source news intelligence (Tier A)
+
+  signals-lab intelligence fetch    Fetch + normalize + dedup (no database)
+  signals-lab intelligence status Show providers and RSS feed count
+
+Tier B (NewsAPI, LunarCrush) are optional enrichers — pipeline does not require them.
+EOF
+            ;;
+        *)
+            err "Unknown intelligence subcommand: $sub (try: fetch, status)"
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # ingest
 # ---------------------------------------------------------------------------
 
@@ -548,7 +665,7 @@ from signals_lab.config import get_settings
 s = get_settings()
 print(f"{'INGESTOR':<12} {'STATUS':<10} {'INTERVAL':<10} {'PROVIDERS'}")
 print("-" * 60)
-for name in ("market", "social", "onchain", "events"):
+for name in ("market", "social", "onchain", "events", "intelligence"):
     svc = getattr(s.ingestion, name)
     status = "enabled" if svc.enabled else "disabled"
     providers = ", ".join(p.name for p in svc.providers) or "(none)"
@@ -843,6 +960,11 @@ PY
     esac
 }
 
+cmd_web() {
+    [[ -x "$WEB_SCRIPT" ]] || die "Missing scripts/web-dev.sh"
+    exec "$WEB_SCRIPT" "$@"
+}
+
 # ---------------------------------------------------------------------------
 # Main dispatch
 # ---------------------------------------------------------------------------
@@ -861,7 +983,9 @@ main() {
         evaluate|eval)        cmd_evaluate "$@" ;;
         api)                  cmd_api "$@" ;;
         health|signals-health) cmd_health "$@" ;;
+        intelligence|intel)  cmd_intelligence "$@" ;;
         context|perplexity)  cmd_context "$@" ;;
+        web|frontend|dashboard) cmd_web "$@" ;;
         db|database)          cmd_db "$@" ;;
         test|tests)           cmd_test "$@" ;;
         lint)                 cmd_lint "$@" ;;

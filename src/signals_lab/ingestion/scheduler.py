@@ -16,6 +16,7 @@ from .market_ingestor import MarketIngestor
 from .social_ingestor import SocialIngestor
 from .onchain_ingestor import OnChainIngestor
 from .event_ingestor import EventIngestor
+from .intelligence_ingestor import IntelligenceIngestor
 
 logger = structlog.get_logger(__name__)
 
@@ -58,6 +59,9 @@ class IngestionScheduler:
 
         if settings.ingestion.events.enabled:
             ingestors.append(EventIngestor.from_settings())
+
+        if settings.ingestion.intelligence.enabled:
+            ingestors.append(IntelligenceIngestor.from_settings())
 
         scheduler = cls(timeseries, ingestors)
         return scheduler
